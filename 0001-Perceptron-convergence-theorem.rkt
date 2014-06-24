@@ -103,124 +103,85 @@
           (* (cadr weights) x))
        (- (caddr weights)))))
 
-;; make sure the w/h plot ratio is the same
-(define LIM (max (+ (/ WIDTH 2.0) (* 2 RADIUS))
-                 (+ DISTANCE (* 2 RADIUS))))
+(define (plot-random-training
+         ;; half moon parameters
+         width distance radius n
+         ;; training parameters
+         training-fn weight-dimensions eta
+         ;; plot parameters
+         nof-retrainings)
+  (define dataset (generate-half-moons width distance radius n))
+  ;; train over random weights several times
+  (parameterize ([plot-width   600]
+                 [plot-height  600]
+                 [plot-x-label #f]
+                 [plot-y-label #f])
+    ;; make sure the w/h plot ratio is the same
+    (define lim (max (+ (/ width 2.0) (* 2 radius))
+                     (+ distance (* 2 radius))))
+    ;; color each region differently
+    (define regionA (map get-input
+                         (filter (lambda (x)
+                                   (= (get-desired x) 1))
+                                 dataset)))
+    (define regionB (map get-input
+                         (filter (lambda (x) (= (get-desired x) -1))
+                                 dataset)))
+    (plot (append
+           (list (points regionA #:size 0.5 #:color
+                         '(0 0 100))
+                 (points regionB #:size 0.5 #:color
+                         '(100 100 0)))
+           (for/list ([n nof-retrainings])
+             (define w
+               (train-perceptron
+                dataset
+                (make-random-weights weight-dimensions)
+                eta))
+             (function (decision-boundary
+                        w)
+                       #:width 0.05)))
+          #:x-min (- lim) #:x-max lim
+          #:y-min (- lim) #:y-max lim
+          #:title "dataset")))
 
-;; Train over random weights several times
-(parameterize ([plot-width   600]
-               [plot-height  600]
-               [plot-x-label #f]
-               [plot-y-label #f])
-  ;; Color each region differently
-  (define regionA (map get-input
-                       (filter (lambda (x)
-                                 (= (get-desired x) 1))
-                               dataset)))
-  (define regionB (map get-input
-                       (filter (lambda (x) (= (get-desired x) -1))
-                               dataset)))
-  (plot (append
-         (list (points regionA #:size 0.5 #:color '(0 0 100))
-               (points regionB #:size 0.5 #:color '(100 100 0)))
-         (for/list ([n 100])
-           (define w
-             (train-perceptron dataset (make-random-weights M)
-                               ETA))
-           (function (decision-boundary
-                      w)
-                     #:width 0.05)))
-        #:x-min (- LIM) #:x-max LIM
-        #:y-min (- LIM) #:y-max LIM
-        #:title "Dataset"))
-
-;; Number of trained samples vs error
-(define REPETITIONS 50.0)
-
-(define graph
-  (for/list ([n (range 0 10000 100)])
-    (define error
-      (/ 
-       (for/fold ([sum 0.0]) ([repetition (range 0 REPETITIONS)])
-         (define weights (make-random-weights M))
-         (+ sum (compute-error
-                 (train-perceptron (take dataset n) weights ETA)
-                 dataset)))
-       REPETITIONS))
-    (list n error)))
-
-(parameterize ([plot-width   600]
-               [plot-height  600]
-               [plot-x-label "n"]
-               [plot-y-label "error"])
-  (plot (lines graph
-               #:width 2
-               #:color (list 255 0 0))
-        #:title #f))
+(define (plot-error-vs-nof-samples
+         ;; half moon parameters
+         width distance radius n
+         ;; training parameters
+         training-fn weight-dimensions eta
+         ;; plot parameters
+         step repetitions)
+  (define dataset (generate-half-moons width distance radius n))
+  (define graph
+    (for/list ([n (range 0 n step)])
+      (define error
+        (/ 
+         (for/fold ([sum 0.0])
+             ([repetition (range 0 repetitions)])
+           (define weights (make-random-weights
+                            weight-dimensions))
+           (+ sum (compute-error
+                   (training-fn
+                    (take dataset n)
+                    weights eta)
+                   dataset)))
+         repetitions))
+      (list n error)))
+  (parameterize ([plot-width   600]
+                 [plot-height  600]
+                 [plot-x-label "n"]
+                 [plot-y-label "error"])
+    (plot (lines graph
+                 #:width 2
+                 #:color (list 255 0 0))
+          #:title #f)))
 
 
-;; Number of trained samples vs error when linear separation is
-;; not possible
-(define WIDTH    4)     ;; thickness of the half moon ring
-(define DISTANCE -1)   ;; y-distance between the two rings
-(define RADIUS   7)     ;; ring radius
-(define N        10000) ;; size of the dataset
-(define dataset (generate-half-moons WIDTH DISTANCE RADIUS N))
+(plot-random-training WIDTH -1 RADIUS 20000
+                      train-perceptron M ETA
+                      1000)
 
-;; make sure the w/h plot ratio is the same
-(define LIM (max (+ (/ WIDTH 2.0) (* 2 RADIUS))
-                 (+ DISTANCE (* 2 RADIUS))))
-
-;; Train over random weights several times
-(parameterize ([plot-width   600]
-               [plot-height  600]
-               [plot-x-label #f]
-               [plot-y-label #f])
-  ;; Color each region differently
-  (define regionA (map get-input
-                       (filter (lambda (x)
-                                 (= (get-desired x) 1))
-                               dataset)))
-  (define regionB (map get-input
-                       (filter (lambda (x) (= (get-desired x) -1))
-                               dataset)))
-  (plot (append
-         (list (points regionA #:size 0.5 #:color '(0 0 100))
-               (points regionB #:size 0.5 #:color '(100 100 0)))
-         (for/list ([n 100])
-           (define w
-             (train-perceptron dataset (make-random-weights M)
-                               ETA))
-           (function (decision-boundary
-                      w)
-                     #:width 0.05)))
-        #:x-min (- LIM) #:x-max LIM
-        #:y-min (- LIM) #:y-max LIM
-        #:title "Dataset"))
-
-(define REPETITIONS 50.0)
-
-(define graph
-  (for/list ([n (range 0 10000 100)])
-    (define error
-      (/ 
-       (for/fold ([sum 0.0]) ([repetition (range 0 REPETITIONS)])
-         (define weights (make-random-weights M))
-         (+ sum (compute-error
-                 (train-perceptron (take dataset n) weights ETA)
-                 dataset)))
-       REPETITIONS))
-    (list n error)))
-
-(parameterize ([plot-width   600]
-               [plot-height  600]
-               [plot-x-label "n"]
-               [plot-y-label "error"])
-  (plot (lines graph
-               #:width 2
-               #:color (list 255 0 0))
-        #:title #f))
-
-;; always plotting the same thing:
-;; generate a dataset, make weights, train, plot results
-;; plot error based on the number of seen examples
+(plot-error-vs-nof-samples WIDTH DISTANCE RADIUS N
+                           train-perceptron M ETA
+                           1000 100)
