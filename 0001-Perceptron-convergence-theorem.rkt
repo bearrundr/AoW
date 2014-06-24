@@ -83,15 +83,14 @@
 (define dataset (generate-half-moons WIDTH DISTANCE RADIUS N))
 
 ;; Perceptron parameters
-(define (make-random-weights n)
-  (build-list (+ n) (lambda _ (- (random) 0.5))))
+(define (make-random-weights n (scale 1.0))
+  (build-list (+ n) (lambda _ (* scale (- (random) 0.5)))))
 (define M      3)
 (define WEIGHTS (make-random-weights M))
 (define ETA    0.3)   ;; learning rate
 
 (set! WEIGHTS (train-perceptron dataset WEIGHTS ETA))
 (printf "error: ~a~n" (compute-error WEIGHTS dataset))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Plots
@@ -107,7 +106,7 @@
          ;; half moon parameters
          width distance radius n
          ;; training parameters
-         training-fn weight-dimensions eta
+         training-fn weight-dimensions eta weight-scale
          ;; plot parameters
          nof-retrainings)
   (define dataset (generate-half-moons width distance radius n))
@@ -136,7 +135,9 @@
              (define w
                (train-perceptron
                 dataset
-                (make-random-weights weight-dimensions)
+                (make-random-weights
+                 weight-dimensions
+                 weight-scale)
                 eta))
              (function (decision-boundary
                         w)
@@ -149,7 +150,7 @@
          ;; half moon parameters
          width distance radius n
          ;; training parameters
-         training-fn weight-dimensions eta
+         training-fn weight-dimensions eta weight-scale
          ;; plot parameters
          step repetitions)
   (define dataset (generate-half-moons width distance radius n))
@@ -160,7 +161,8 @@
          (for/fold ([sum 0.0])
              ([repetition (range 0 repetitions)])
            (define weights (make-random-weights
-                            weight-dimensions))
+                            weight-dimensions
+                            weight-scale))
            (+ sum (compute-error
                    (training-fn
                     (take dataset n)
@@ -178,10 +180,10 @@
           #:title #f)))
 
 
-(plot-random-training WIDTH -1 RADIUS 20000
-                      train-perceptron M ETA
-                      1000)
+(plot-random-training WIDTH -1 RADIUS 5000 
+                      train-perceptron M ETA 10.0
+                      100)
 
 (plot-error-vs-nof-samples WIDTH DISTANCE RADIUS N
-                           train-perceptron M ETA
+                           train-perceptron M ETA 10.0
                            1000 100)
