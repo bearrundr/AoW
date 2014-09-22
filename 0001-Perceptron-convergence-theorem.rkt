@@ -12,8 +12,8 @@
 (require racket/base)
 (require plot)
 ;; load because procedures use some functions from this file
-(load "plotting.rkt") 
 (require "distributions.rkt")
+(load    "plotting.rkt")
 
 (plot-new-window? #t)
 
@@ -58,25 +58,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Training
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (train-perceptron dataset weights eta)
-  (define (update-weights weights input gradient eta)
-    (map
-     (lambda (w x)
-       (+ w (* x eta gradient)))
-     weights input))
-  (define (train-iterative weights eta dataset)
-    (if (empty? dataset)
-        weights
-        (let* ([example (car dataset)]
-               [x (cons 1.0 (get-input example))]
-               [desired (get-desired example)]
-               [response (compute-response weights x)]
-               [gradient (- desired response)])
-          (train-iterative
-           (update-weights weights x
-                           gradient eta)
-           eta (cdr dataset)))))
-  (train-iterative weights eta dataset))
+(define (train-perceptron training-set weights eta)
+  (for/fold ([weights weights]) ([example training-set])
+    (define input    (cons 1.0 (get-input example)))
+    (define desired  (get-desired example))
+    (define response (compute-response weights input))
+    (define error    (- desired response))
+    (for/list ([w weights] [x input]) ;; update weights
+      (+ w (* x eta error)))))
 
 ;; Half moons distribution parameters
 (define WIDTH    4)     ;; thickness of the half moon ring
@@ -106,10 +95,34 @@
        (- (caddr weights)))))
 
 ;; Produce some plots
-(plot-random-training WIDTH -1 RADIUS 5000 
+(plot-random-training WIDTH 1 RADIUS 5000
                       train-perceptron M 0.3 1.0
-                      100)
+                      0
+                      "data-example.pdf" 'pdf)
+
+
+(plot-random-training WIDTH 1 RADIUS 5000
+                      train-perceptron M ETA 1.0
+                      100
+                      "Training with random starting position"
+                      "training-01.svg" 'svg)
+
+(plot-random-training WIDTH -1 RADIUS 5000
+                      train-perceptron M ETA 1.0
+                      100
+                      ""
+                      "nonseparable-01.svg" 'svg)
+
+
+(plot-error-vs-nof-samples WIDTH 1 RADIUS N
+                           train-perceptron M ETA 1.0
+                           500 50
+                           "Error rate"
+                           "error-rate-separable.svg" 'svg)
+
 
 (plot-error-vs-nof-samples WIDTH -3 RADIUS N
                            train-perceptron M ETA 1.0
-                           500 50)
+                           500 50
+                           "Error rate"
+                           "error-rate-nonseparable.svg" 'svg)

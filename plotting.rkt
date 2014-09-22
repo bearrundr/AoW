@@ -1,11 +1,12 @@
-(require plot)
 (define (plot-random-training
          ;; half moon parameters
          width distance radius n
          ;; training parameters
          training-fn weight-dimensions eta weight-scale
          ;; plot parameters
-         nof-retrainings)
+         nof-retrainings
+         (figure-name "dataset")
+         (file-name #f) (kind 'svg))
   (define dataset (generate-half-moons width distance radius n))
   ;; train over random weights several times
   (parameterize ([plot-width   600]
@@ -23,25 +24,33 @@
     (define regionB (map get-input
                          (filter (lambda (x) (= (get-desired x) -1))
                                  dataset)))
-    (plot (append
-           (list (points regionA #:size 0.5 #:color
-                         '(0 0 100))
-                 (points regionB #:size 0.5 #:color
-                         '(100 100 0)))
-           (for/list ([n nof-retrainings])
-             (define w
-               (train-perceptron
-                dataset
-                (make-random-weights
-                 weight-dimensions
-                 weight-scale)
-                eta))
-             (function (decision-boundary
-                        w)
-                       #:width 0.05)))
-          #:x-min (- lim) #:x-max lim
-          #:y-min (- lim) #:y-max lim
-          #:title "dataset")))
+    (define plot-list
+      (append
+       (list (points regionA #:size 0.5 #:color
+                     '(0 0 100))
+             (points regionB #:size 0.5 #:color
+                     '(100 100 0)))
+       (for/list ([n nof-retrainings])
+         (define w
+           (train-perceptron
+            dataset
+            (make-random-weights
+             weight-dimensions
+             weight-scale)
+            eta))
+         (function (decision-boundary
+                    w)
+                   #:width 0.1))))
+    (if file-name
+        (plot-file plot-list
+                   file-name kind                   
+                   #:x-min (- lim) #:x-max lim
+                   #:y-min (- lim) #:y-max lim
+                   #:title figure-name)
+        (plot plot-list
+              #:x-min (- lim) #:x-max lim
+              #:y-min (- lim) #:y-max lim
+              #:title figure-name))))
 
 (define (plot-error-vs-nof-samples
          ;; half moon parameters
@@ -49,7 +58,9 @@
          ;; training parameters
          training-fn weight-dimensions eta weight-scale
          ;; plot parameters
-         step repetitions)
+         step repetitions
+         (figure-name "dataset")
+         (file-name #f) (kind 'svg))
   (define dataset (generate-half-moons width distance radius n))
   (define graph
     (for/list ([n (range 0 n step)])
@@ -68,10 +79,16 @@
          repetitions))
       (list n error)))
   (parameterize ([plot-width   600]
-                 [plot-height  600]
+                 [plot-height  300]
                  [plot-x-label "n"]
                  [plot-y-label "error"])
-    (plot (lines graph
-                 #:width 2
-                 #:color (list 255 0 0))
-          #:title #f)))
+    (if file-name
+        (plot-file (lines graph
+                          #:width 2
+                          #:color (list 255 0 0))
+                   #:title #f
+                   file-name kind)
+        (plot (lines graph
+                     #:width 2
+                     #:color (list 255 0 0))
+              #:title #f))))
