@@ -1,4 +1,8 @@
 *
-!*.rkt
+
 !.gitignore
+
+!*.org
+!*.rkt
+
 !*/
