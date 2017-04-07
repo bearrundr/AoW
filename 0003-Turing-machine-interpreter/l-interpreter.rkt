@@ -1,50 +1,49 @@
 (require racket/main)
 ;; Turing machine interpreter written in L
 (define tm-interpreter
- (list->vector
   '((read Q Right)
     (init (set! Qtail Q)
-           (set! Left (quote ()))
-           (goto loop))
+          (set! Left (quote ()))
+          (goto loop))
     (loop (if (= Qtail (quote ()))
-               (goto stop)
-               (goto cont)))
+              (goto stop)
+              (goto cont)))
     (cont (set! Instruction (first-instruction Qtail))
-           (set! Qtail (rest Qtail))
-           (set! Operator (hd (tl Instruction)))
-           
-           (if (= Operator 'right) (goto do-right) (goto cont1)))
+          (set! Qtail (rest Qtail))
+          (set! Operator (hd (tl Instruction)))
+          
+          (if (= Operator 'right) (goto do-right) (goto cont1)))
     (cont1 (if (= Operator 'left) (goto do-left) (goto cont2)))
     (cont2 (if (= Operator 'write) (goto do-write) (goto cont3)))
     (cont3 (if (= Operator 'goto) (goto do-goto) (goto cont4)))
     (cont4 (if (= Operator 'if) (goto do-if) (goto error)))
 
     (do-right (set! Left (cons (firstsym Right) Left))
-               (set! Right (tl Right))
-               (goto loop))
+              (set! Right (tl Right))
+              (goto loop))
 
     (do-left (set! Right (cons (firstsym Left) Right))
-              (set! Left (tl Left))
-              (goto loop))
+             (set! Left (tl Left))
+             (goto loop))
 
     (do-write (set! Symbol (hd (tl (tl Instruction))))
-               (set! Right (cons Symbol (tl Right)))
-               (goto loop))
-
-    (do-goto (set! Nextlabel (hd (tl (tl Instruction))))
-              (set! Qtail (new-tail Nextlabel Q))
+              (set! Right (cons Symbol (tl Right)))
               (goto loop))
 
+    (do-goto (set! Nextlabel (hd (tl (tl Instruction))))
+             (set! Qtail (new-tail Nextlabel Q))
+             (goto loop))
+
     (do-if (set! Symbol (hd (tl (tl Instruction))))
-            (set! Nextlabel (hd (tl (tl (tl (tl Instruction))))))
-            (if (= Symbol (firstsym Right)) (goto jump) (goto loop)))
+           (set! Nextlabel (hd (tl (tl (tl (tl Instruction))))))
+           (if (= Symbol (firstsym Right)) (goto jump) (goto loop)))
 
     (jump (set! Qtail (new-tail Nextlabel Q))
-           (goto loop))
+          (goto loop))
 
     (error (return (cons 'syntax-error: Instruction)))
 
-    (stop (return Right)))))
+    (stop (return Right))))
 
 (define (firstsym a-list)
   (if (empty? a-list)
@@ -74,6 +73,7 @@
 (define (first-instruction Q) (car Q))
 
 (define (l-interpreter l-program vals proc-bindings)
+  (set! l-program (list->vector l-program))
   (define N-steps 10000)
   (define current-step 0)
   (define (steps-reached?)
@@ -94,8 +94,18 @@
   (define (add-var! var val)
     (set! env (cons (cons var val) env)))
   (define (set-var! var val)
-    (unless (has-binding? var)
-      (add-var! var val)))
+    (cond [(has-binding? var) ;; replace binding
+           (let loop ([done '()]
+                      [todo env])
+             (if (eq? (caar todo) var)
+                 (set! env
+                       (append done
+                               (cons (cons var val)
+                                     (cdr todo))))
+                 (loop (append done (list (car todo)))
+                       (cdr todo))))]
+          [else
+           (add-var! var val)]))
   (define (lookup-var var)
     (let loop ([env env])
       (cond [(empty? env) empty]
@@ -122,7 +132,8 @@
              ['set!
               (define var (cadr expr))
               (define val (eval (caddr expr)))
-              (set-var! var val)]
+              (set-var! var val)
+              (printf "~a := ~a\n" var val)]
              ['quote (cadr expr)]
              ['if
               (if (eval (cadr expr))
@@ -130,10 +141,12 @@
                   (eval (cadddr expr)))]
              ['goto
               (define label (cadr expr))
+              (printf "-> ~a~n" label)
               (define next-block (lookup-label label))
               (eval-basic-block (vector-ref l-program next-block))]
              ['return
-              (cdr expr)]
+              (printf "cdr: ~a~n" (cdr expr))
+              (eval (cadr expr))]
              [proc ;; procedure
               (apply (eval-proc proc) (map eval (cdr expr)))])]
           [(number? expr) expr]
@@ -142,22 +155,25 @@
 
   (define (eval-basic-block basic-block)
     (incr-steps!)
-    (printf "~a~n" (car basic-block))
+    ;;(pretty-print env)
     (if (steps-reached?)
         (printf "DONE~n")
-        (for [(expr (cdr basic-block))]
-          (eval expr))))
+        (let loop ([exprs (cdr basic-block)])
+          (cond [(empty? exprs) 'DONE]
+                [(empty? (cdr exprs)) (eval (car exprs))]
+                [else (eval (car exprs))
+                      (loop (cdr exprs))]))))
   
-    ;; start evaluation
+  ;; start evaluation
   (define first-expression (vector-ref l-program 0))
-  (printf "~a~n" first-expression)
   (cond [(eq? (car first-expression) 'read)
          (for ([var (cdr first-expression)]
                [val vals])
            (add-var! var val))]
         [else
-         (error "Syntax error: expected a 'read' expression, but got: ~a~n"
-                first-expression)])
+         (error
+          "Syntax error: expected a 'read' expression, but got: ~a~n"
+          first-expression)])
 
   (eval-basic-block (vector-ref l-program 1)))
 
@@ -180,4 +196,19 @@
     (2 goto 0)
     (3 write 1)))
 
-(l-interpreter tm-interpreter (list p0 (list 1 1 0 1 0 1)) procs)
+(define p1
+  '((read Right)
+    (lab0 (set! Left (quote ()))
+          (if (= 0 (firstsym Right))
+              (goto lab2)
+              (goto lab1)))
+    (lab1 (set! Left (cons (firstsym Right) Left))
+          (set! Right (tl Right))
+          (if (= 0 (firstsym Right))
+              (goto lab2)
+              (goto lab1)))
+    (lab2 (set! Right (cons 1 (tl Right)))
+          (return Right))))
+
+(l-interpreter tm-interpreter (list p0 (list 1 1 0 0 0 0)) procs)
+(l-interpreter p1 (list (list 1 1 0 0 0 0)) procs)
