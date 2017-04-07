@@ -100,29 +100,35 @@
                       0
                       "data-example.pdf" 'pdf)
 
+(plot-random-training WIDTH 1 RADIUS 5000
+                      train-perceptron M 0.3 1.0
+                      0
+                      "Double moon distribution"
+                      "data-example.jpg" 'jpeg)
+
 
 (plot-random-training WIDTH 1 RADIUS 5000
                       train-perceptron M ETA 1.0
                       100
                       "Training with random starting position"
-                      "training-01.svg" 'svg)
+                      "training-01.jpg" 'jpeg)
 
 (plot-random-training WIDTH -1 RADIUS 5000
                       train-perceptron M ETA 1.0
                       100
                       ""
-                      "nonseparable-01.svg" 'svg)
+                      "nonseparable-01.jpg" 'jpeg)
 
 
 (plot-error-vs-nof-samples WIDTH 1 RADIUS N
                            train-perceptron M ETA 1.0
                            500 50
                            "Error rate"
-                           "error-rate-separable.svg" 'svg)
+                           "error-rate-separable.jpg" 'jpeg)
 
 
 (plot-error-vs-nof-samples WIDTH -3 RADIUS N
                            train-perceptron M ETA 1.0
                            500 50
                            "Error rate"
-                           "error-rate-nonseparable.svg" 'svg)
+                           "error-rate-nonseparable.jpg" 'jpeg)
