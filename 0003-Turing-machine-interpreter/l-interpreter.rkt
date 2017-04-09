@@ -1,49 +1,49 @@
 (require racket/main)
 ;; Turing machine interpreter written in L
-(define tm-interpreter
+(define Turing-machine-interpreter
   '((read Q Right)
-    (init (set! Qtail Q)
+    (init: (set! Qtail Q)
           (set! Left (quote ()))
           (goto loop))
-    (loop (if (= Qtail (quote ()))
+    (loop: (if (= Qtail (quote ()))
               (goto stop)
               (goto cont)))
-    (cont (set! Instruction (first-instruction Qtail))
+    (cont: (set! Instruction (first-instruction Qtail))
           (set! Qtail (rest Qtail))
           (set! Operator (hd (tl Instruction)))
           
           (if (= Operator 'right) (goto do-right) (goto cont1)))
-    (cont1 (if (= Operator 'left) (goto do-left) (goto cont2)))
-    (cont2 (if (= Operator 'write) (goto do-write) (goto cont3)))
-    (cont3 (if (= Operator 'goto) (goto do-goto) (goto cont4)))
-    (cont4 (if (= Operator 'if) (goto do-if) (goto error)))
+    (cont1: (if (= Operator 'left) (goto do-left) (goto cont2)))
+    (cont2: (if (= Operator 'write) (goto do-write) (goto cont3)))
+    (cont3: (if (= Operator 'goto) (goto do-goto) (goto cont4)))
+    (cont4: (if (= Operator 'if) (goto do-if) (goto error)))
 
-    (do-right (set! Left (cons (firstsym Right) Left))
+    (do-right: (set! Left (cons (firstsym Right) Left))
               (set! Right (tl Right))
               (goto loop))
 
-    (do-left (set! Right (cons (firstsym Left) Right))
+    (do-left: (set! Right (cons (firstsym Left) Right))
              (set! Left (tl Left))
              (goto loop))
 
-    (do-write (set! Symbol (hd (tl (tl Instruction))))
+    (do-write: (set! Symbol (hd (tl (tl Instruction))))
               (set! Right (cons Symbol (tl Right)))
               (goto loop))
 
-    (do-goto (set! Nextlabel (hd (tl (tl Instruction))))
+    (do-goto: (set! Nextlabel (hd (tl (tl Instruction))))
              (set! Qtail (new-tail Nextlabel Q))
              (goto loop))
 
-    (do-if (set! Symbol (hd (tl (tl Instruction))))
+    (do-if: (set! Symbol (hd (tl (tl Instruction))))
            (set! Nextlabel (hd (tl (tl (tl (tl Instruction))))))
            (if (= Symbol (firstsym Right)) (goto jump) (goto loop)))
 
-    (jump (set! Qtail (new-tail Nextlabel Q))
+    (jump: (set! Qtail (new-tail Nextlabel Q))
           (goto loop))
 
-    (error (return (cons 'syntax-error: Instruction)))
+    (error: (return (cons 'syntax-error: Instruction)))
 
-    (stop (return Right))))
+    (stop: (return Right))))
 
 (define (firstsym a-list)
   (if (empty? a-list)
@@ -72,110 +72,239 @@
 
 (define (first-instruction Q) (car Q))
 
-(define (l-interpreter l-program vals proc-bindings)
+(define (L-interpreter l-program vals proc-bindings)
+  ;; count number of executed statements
+  (define exec-cost 0)
+  (define (inc-cost! n)
+    (set! exec-cost (+ exec-cost n)))
+  
   (set! l-program (list->vector l-program))
-  (define N-steps 10000)
-  (define current-step 0)
-  (define (steps-reached?)
-    (>= current-step N-steps))
-  (define (incr-steps!) (set! current-step (+ current-step 1)))
+  (inc-cost! (vector-length l-program))
+
+  ;; program counter needed for Pascal-style programming
+  (define PC 0)
+  (define (incr-pc!) (set! PC (+ PC 1)))
+  (define (current-expression)
+    (if (>= PC (vector-length l-program))
+        #f
+        (vector-ref l-program PC)))
+  (define (current-expression!)
+    (if (>= PC (vector-length l-program))
+        #f
+        (let ([expr (vector-ref l-program PC)])
+          (incr-pc!)
+          expr)))
+  (define finished? #f)
+  (define returned? #f)
+  (define goto? #f)
+  (define return-value 0)
+  
   ;; give labels fast access
+  (define (label? label)
+    (cond [(symbol? label)
+           (define label-str (symbol->string label))
+           (define last-char
+             (string-ref label-str
+                         (- (string-length label-str) 1)))
+           (char=? last-char #\:)]
+          [else #f]))
   (define labels
     (for/hash ([block l-program]
                [i (vector-length l-program)]
-               #:when (> i 0))
+               #:when (label? (car block)))
+      (inc-cost! 7)
       (define label (car block))
+      ;; string the trailing ":" character of each label
+      (define label-str (symbol->string label))
+      (define stripped-label
+        (substring label-str 0 (- (string-length label-str) 1)))
+      (set! label (string->symbol stripped-label))
       (values label i)))
   (define (lookup-label label)
     (hash-ref labels label))
 
   ;; make a new environment
   (define env '())
+  
   (define (add-var! var val)
+    (inc-cost! 3)
     (set! env (cons (cons var val) env)))
+  
   (define (set-var! var val)
     (cond [(has-binding? var) ;; replace binding
            (let loop ([done '()]
                       [todo env])
+             (inc-cost! 4)
              (if (eq? (caar todo) var)
-                 (set! env
-                       (append done
-                               (cons (cons var val)
-                                     (cdr todo))))
-                 (loop (append done (list (car todo)))
-                       (cdr todo))))]
+                 (begin
+                   (inc-cost! 10)
+                   (set! env
+                         (append done
+                                 (cons (cons var val)
+                                       (cdr todo)))))
+                 (begin
+                   (inc-cost! 5)
+                   (loop (append done (list (car todo)))
+                         (cdr todo)))))]
           [else
+           (inc-cost! 1)
            (add-var! var val)]))
+  
   (define (lookup-var var)
     (let loop ([env env])
-      (cond [(empty? env) empty]
+      (inc-cost! 2)
+      (cond [(empty? env)
+             (inc-cost! 1)
+             empty]
             [(eq? (caar env) var)
+             (inc-cost! 4)
              (cdar env)]
-            [else (loop (cdr env))])))
+            [else
+             (inc-cost! 2)
+             (loop (cdr env))])))
+  
   (define (has-binding? var)
     (let loop ([env env])
-      (cond [(empty? env) #f]
-            [(eq? (caar env) var) #t]
-            [else (loop (cdr env))])))
+      (inc-cost! 2)
+      (cond [(empty? env)
+             (inc-cost! 1)
+             #f]
+            [(eq? (caar env) var)
+             (inc-cost! 3)
+             #t]
+            [else
+             (inc-cost! 2)
+             (loop (cdr env))])))
 
   (define (eval-proc proc)
     (let loop ([bindings proc-bindings])
+      (inc-cost! 2)
       (cond [(empty? bindings)
-             (error 'eval-proc "procedure '~a' has no binding." proc)]
+             (inc-cost! 2)
+             (error 'eval-proc "procedure '~a' has no binding."
+                    proc)]
             [(eq? proc (caar bindings))
+             (inc-cost! 5)
              (cdar bindings)]
-            [else (loop (cdr bindings))])))
+            [else
+             (inc-cost! 2)
+             (loop (cdr bindings))])))
 
   (define (eval expr)
+    (inc-cost! 1)
+    (set! goto? #f)
     (cond [(list? expr)
+           (inc-cost! 2)
            (match (car expr)
              ['set!
+              (inc-cost! 9)
               (define var (cadr expr))
               (define val (eval (caddr expr)))
-              (set-var! var val)
-              (printf "~a := ~a\n" var val)]
-             ['quote (cadr expr)]
+              (set-var! var val)]
+             ['quote
+              (inc-cost! 2)
+              (cadr expr)]
+             ['while
+              (let loop ()
+                (inc-cost! 5)
+                (when (eval (cadr expr))
+                  (inc-cost! 6)
+                  (let inner-loop ([body (cddr expr)])
+                    (unless (empty? body)
+                      (inc-cost! 4)
+                      (eval (car body))
+                      (inner-loop (cdr body))))
+                  (loop)))]
              ['if
+              (inc-cost! 4)
               (if (eval (cadr expr))
-                  (eval (caddr expr))
-                  (eval (cadddr expr)))]
+                  (begin
+                    (inc-cost! 4)
+                    (eval (caddr expr)))
+                  (begin
+                    (inc-cost! 5)
+                    (eval (cadddr expr))))]
              ['goto
+              (set! goto? #t)
+              (inc-cost! 7)
               (define label (cadr expr))
-              (printf "-> ~a~n" label)
               (define next-block (lookup-label label))
               (eval-basic-block (vector-ref l-program next-block))]
              ['return
-              (printf "cdr: ~a~n" (cdr expr))
-              (eval (cadr expr))]
+              (set! returned? #t)
+              (inc-cost! 3)
+              (define result (eval (cadr expr)))
+              (set! return-value result)
+              result]
              [proc ;; procedure
+              (inc-cost! (+ 3 -1 (length expr) ))
               (apply (eval-proc proc) (map eval (cdr expr)))])]
-          [(number? expr) expr]
-          [(string? expr) expr]
-          [else (lookup-var expr)]))
+          [(number? expr)
+           (inc-cost! 1)
+           expr]
+          [(string? expr)
+           (inc-cost! 1)
+           expr]
+          [else
+           (inc-cost! 1)
+           (lookup-var expr)]))
 
   (define (eval-basic-block basic-block)
-    (incr-steps!)
-    ;;(pretty-print env)
-    (if (steps-reached?)
-        (printf "DONE~n")
-        (let loop ([exprs (cdr basic-block)])
-          (cond [(empty? exprs) 'DONE]
-                [(empty? (cdr exprs)) (eval (car exprs))]
-                [else (eval (car exprs))
-                      (loop (cdr exprs))]))))
-  
+    (define (loop exprs)
+      (inc-cost! 3)
+      (cond [(empty? exprs)
+             (inc-cost! 1)
+             (printf "execution cost: ~a~n" exec-cost)
+             (error 'eval-basic-block
+                    "syntax error: empty basic block.")]
+            [(empty? (cdr exprs))
+             (inc-cost! 5)
+             (define result (eval (car exprs)))
+             (cond [finished?
+                    (inc-cost! 1)
+                    return-value]
+                   [returned?
+                    (inc-cost! 1)
+                    (printf "execution cost: ~a~n" exec-cost)
+                    (set! finished? #t)
+                    result]
+                   [else
+                    (inc-cost! 4)
+                    (define next-expression (current-expression!))
+                    (if next-expression
+                        (eval-basic-block next-expression)
+                        (begin
+                          (printf "execution cost: ~a~n" exec-cost)
+                          result))])]
+            [else
+             (inc-cost! 4)
+             (eval (car exprs))
+             (loop (cdr exprs))]))
+    (inc-cost! 1)
+    (cond [(label? (car basic-block)) ;; skip label
+           (inc-cost! 4)
+           (loop (cdr basic-block))]
+          [else
+           (inc-cost! 3)
+           (loop (list basic-block))]))
+
   ;; start evaluation
-  (define first-expression (vector-ref l-program 0))
+  (inc-cost! 2)
+  (define first-expression (current-expression!))
   (cond [(eq? (car first-expression) 'read)
+         (inc-cost! 2)
          (for ([var (cdr first-expression)]
                [val vals])
+           (inc-cost! 5)
            (add-var! var val))]
         [else
+         (inc-cost! 1)
          (error
           "Syntax error: expected a 'read' expression, but got: ~a~n"
           first-expression)])
 
-  (eval-basic-block (vector-ref l-program 1)))
+  (inc-cost! 2)
+  (eval-basic-block (current-expression!)))
 
 (define procs
   (list
@@ -188,7 +317,9 @@
    (cons '= eq?)
    (cons 'rest rest)
    (cons 'car car)
-   (cons 'first first)))
+   (cons 'cdr cdr)
+   (cons 'first first)
+   (cons 'not not)))
 
 (define p0
   '((0 if 0 goto 3)
@@ -198,17 +329,27 @@
 
 (define p1
   '((read Right)
-    (lab0 (set! Left (quote ()))
-          (if (= 0 (firstsym Right))
-              (goto lab2)
-              (goto lab1)))
-    (lab1 (set! Left (cons (firstsym Right) Left))
-          (set! Right (tl Right))
-          (if (= 0 (firstsym Right))
-              (goto lab2)
-              (goto lab1)))
-    (lab2 (set! Right (cons 1 (tl Right)))
-          (return Right))))
+    (lab0: (set! Left (quote ()))
+           (if (= 0 (firstsym Right))
+               (goto lab2)
+               (goto lab1)))
+    (lab1: (set! Left (cons (firstsym Right) Left))
+           (set! Right (tl Right))
+           (if (= 0 (firstsym Right))
+               (goto lab2)
+               (goto lab1)))
+    (lab2: (set! Right (cons 1 (tl Right)))
+           (return Right))))
 
-(l-interpreter tm-interpreter (list p0 (list 1 1 0 0 0 0)) procs)
-(l-interpreter p1 (list (list 1 1 0 0 0 0)) procs)
+(define p2
+  '((read search L)
+    (while (not (= search (car L)))
+      (set! L (cdr L)))
+    (return L)))
+    
+
+
+(L-interpreter Turing-machine-interpreter
+               (list p0 (list 1 1 1 0 1 0)) procs)
+(L-interpreter p1 (list (list 1 1 1 0 1 0)) procs)
+(L-interpreter p2 (list 'z '(a b c z d)) procs)
