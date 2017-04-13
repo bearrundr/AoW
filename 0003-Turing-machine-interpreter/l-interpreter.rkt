@@ -261,7 +261,6 @@
               (set! returned? #t)
               (inc-cost! 3)
               (define result (eval (cadr expr)))
-              (printf "return: ~a~n" result)
               (set! return-value result)
               result]
              [proc ;; procedure
@@ -377,7 +376,7 @@
     (return L)))
 
 (define p3
-  '((read c b a)
+  '((read a b c)
     (case c
       [a (set! a (+ a 10))
           (return a)]
@@ -387,10 +386,9 @@
          (return c)])))
 
     
-
 (L-interpreter Turing-machine-interpreter
                (list p0 (list 1 1 1 0 1 0)) procs)
 (L-interpreter p1 (list (list 1 1 1 0 1 0)) procs)
 (L-interpreter p2 (list 'z '(a b c z d)) procs)
-(L-interpreter p3 (list 'b 0 0) procs)
+(L-interpreter p3 (list 0 0 'a) procs)
 
