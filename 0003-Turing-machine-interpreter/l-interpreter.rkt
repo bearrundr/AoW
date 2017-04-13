@@ -215,6 +215,33 @@
                       (eval (car body))
                       (inner-loop (cdr body))))
                   (loop)))]
+             ['case
+               (inc-cost! 8)
+               (define test (eval (cadr expr)))
+               (let loop ([cases (cddr expr)])
+                 (inc-cost! 1)
+                 (cond [(empty? cases)
+                        (inc-cost! 1)
+                        (error 'case "no default statement.")]
+                       [(equal? test (caar cases))
+                        (inc-cost! 7)
+                        (let inner-loop ([body (cdar cases)])
+                          (inc-cost! 1)
+                          (cond [(empty? body)
+                                 (inc-cost! 1)
+                                 (error 'case
+                                        "no body in the case: ~a~n"
+                                        test)]
+                                [(empty? (cdr body))
+                                 (inc-cost! 5)
+                                 (eval (car body))]
+                                [else
+                                 (inc-cost! 5)
+                                 (eval (car body))
+                                 (inner-loop (cdr body))]))]
+                       [else
+                        (inc-cost! 2)
+                        (loop (cdr cases))]))]
              ['if
               (inc-cost! 4)
               (if (eval (cadr expr))
@@ -234,6 +261,7 @@
               (set! returned? #t)
               (inc-cost! 3)
               (define result (eval (cadr expr)))
+              (printf "return: ~a~n" result)
               (set! return-value result)
               result]
              [proc ;; procedure
@@ -319,7 +347,8 @@
    (cons 'car car)
    (cons 'cdr cdr)
    (cons 'first first)
-   (cons 'not not)))
+   (cons 'not not)
+   (cons '+ +)))
 
 (define p0
   '((0 if 0 goto 3)
@@ -346,10 +375,22 @@
     (while (not (= search (car L)))
       (set! L (cdr L)))
     (return L)))
-    
 
+(define p3
+  '((read c b a)
+    (case c
+      [a (set! a (+ a 10))
+          (return a)]
+      [b (set! b (+ b 20))
+         (return b)]
+      [c (set! c 0)
+         (return c)])))
+
+    
 
 (L-interpreter Turing-machine-interpreter
                (list p0 (list 1 1 1 0 1 0)) procs)
 (L-interpreter p1 (list (list 1 1 1 0 1 0)) procs)
 (L-interpreter p2 (list 'z '(a b c z d)) procs)
+(L-interpreter p3 (list 'b 0 0) procs)
+
