@@ -223,7 +223,8 @@
                  (cond [(empty? cases)
                         (inc-cost! 1)
                         (error 'case "no default statement.")]
-                       [(equal? test (caar cases))
+                       [(or (equal? test (caar cases))
+                            (equal? (caar cases) '_))
                         (inc-cost! 7)
                         (let inner-loop ([body (cdar cases)])
                           (inc-cost! 1)
@@ -345,9 +346,12 @@
    (cons 'rest rest)
    (cons 'car car)
    (cons 'cdr cdr)
+   (cons 'cadr cadr)
    (cons 'first first)
    (cons 'not not)
-   (cons '+ +)))
+   (cons '+ +)
+   (cons 'list list)
+   (cons 'empty? empty?)))
 
 (define p0
   '((0 if 0 goto 3)
@@ -371,9 +375,9 @@
 
 (define p2
   '((read search L)
-    (while (not (= search (car L)))
-      (set! L (cdr L)))
-    (return L)))
+    (1: (while (not (= search (car L)))
+          (set! L (cdr L))))
+    (2: (return L))))
 
 (define p3
   '((read a b c)
