@@ -99,7 +99,22 @@
 (define (extend-code code exp)
   (cons code (list exp)))
 
-(define procs
+(define (reduce exp env split)
+  (cond [(exp-static? exp split)
+         (printf "static: ~a~n" exp)
+         (l-eval exp env)]
+        [(list? exp)
+         (cons (car exp)
+               (map (lambda (e)
+                      (reduce e env split))
+                    (cdr exp)))]
+        [else exp]))
+
+(reduce '(+ 1 (+ 2 (+ a 10 (+ 1 2)))) '((a . 20)) '(a b c))
+(exp-static? '(+ 1 (+ 2 (+ a 10 (+ 1 2)))) '())
+(l-eval '(+ 1 (+ 2 (+ a 10 (+ 1 2)))) '((a . 10)))
+
+(define *procs*
   (list
    (cons 'firstsym firstsym)
    (cons 'hd hd)
@@ -125,8 +140,10 @@
    (cons 'update-environment update-environment)
    (cons 'exp-static? exp-static?)
    (cons 'var-static? var-static?)
+   (cons 'reduce reduce)
    (cons 'first-command first-command)
-   (cons 'printf printf)))
+   (cons 'printf printf)
+   ))
 
 (define L-mix
   '((read program split pp0 vs0)
@@ -149,18 +166,19 @@
                (printf "SET! ~a~n" (cadr command))
                (set! X (cadr command))
                (set! exp (caddr command))
-               (printf "static?: ~a~n" (var-static? X split))
                (if (var-static? X split)
-                   (set! vs (update-environment vs X (eval exp)))
+                   (set! vs
+                         (update-environment vs X
+                                             (l-eval exp vs)))
                    (set! code (extend-code
-                               code (list set! X (reduce exp vs)))))]
+                               code (list 'set! X
+                                          (reduce exp vs split)))))]
               [goto ;; compress the transition
+               (printf "GOTO ~a~n" (cdr command))
                (set! pp* (cadr command))
                (set! basic-block (lookup pp* program))]
-              ;;              [_
-              ;;               (set! basic-block empty)]))))
-              ;;    (return: (return code))))
               [if
+               (printf "IF ~a~n" (cdr command))
                (set! exp (cadr program))
                (set! pp* (caddr program))
                (set! pp** (cadddr program))
@@ -168,6 +186,7 @@
                (goto return)
                ]
               [_
+               (printf "_ ~a~n" (cdr command))
                (goto return)
                ]))))
     (return: (return code))))
@@ -186,4 +205,4 @@
     (lab2: (set! Right (cons 1 (tl Right)))
            (return Right))))
 
-(L-interpreter L-mix (list p1 '() 'lab0: (list 1 1 1 0 1 0)) procs)
+(L-interpreter L-mix (list p1 '() 'lab0: (list 1 1 1 0 1 0)) *procs*)
